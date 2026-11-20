@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureLLM</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            padding: 12px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f0f6fc;
+            letter-spacing: -0.2px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        label.toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #8b949e;
+            user-select: none;
+        }
+        label.toggle input { cursor: pointer; accent-color: #238636; }
+        label.toggle input:checked + span { color: #58a6ff; font-weight: 500; }
+        .docs-link { color: #8b949e; text-decoration: none; font-size: 13px; }
+        .docs-link:hover { color: #58a6ff; }
+        #chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .empty-hint {
+            margin: auto;
+            color: #484f58;
+            font-size: 13px;
+        }
+        .entry {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .entry .role {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8b949e;
+        }
+        .entry.user .role { color: #58a6ff; }
+        .entry.bot .role { color: #7ee787; }
+        .entry.blocked .role { color: #f85149; }
+        .entry .text {
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #e6edf3;
+        }
+        .entry.blocked .text { color: #ff7b72; }
+        .entry .meta {
+            font-size: 11px;
+            color: #6e7681;
+            font-family: ui-monospace, SFMono-Regular, monospace;
+        }
+        footer {
+            border-top: 1px solid #30363d;
+            padding: 16px 20px;
+            background: #0d1117;
+        }
+        form {
+            display: flex;
+            gap: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        input[type="text"] {
+            flex: 1;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #f0f6fc;
+            font-size: 14px;
+            outline: none;
+        }
+        input[type="text"]:focus {
+            border-color: #58a6ff;
+        }
+        button {
+            background: #238636;
+            color: #fff;
+            border: 1px solid rgba(240, 246, 252, 0.1);
+            border-radius: 6px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        button:hover { background: #2ea043; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="title">SecureLLM</div>
+        <div class="controls">
+            <label class="toggle">
+                <input type="checkbox" id="guardrailsToggle" checked>
+                <span>Guardrails Active</span>
+            </label>
+            <a href="/docs" target="_blank" class="docs-link">API Docs</a>
+        </div>
+    </header>
+    <div id="chat">
+        <div class="empty-hint" id="emptyHint">Ready. Type a prompt below to test.</div>
+    </div>
+    <footer>
+        <form onsubmit="sendPrompt(event)">
+            <input type="text" id="promptInput" placeholder="Enter message..." autocomplete="off" autofocus>
+            <button type="submit" id="sendBtn">Send</button>
+        </form>
+    </footer>
+    <script>
+        const chat = document.getElementById('chat');
+        const emptyHint = document.getElementById('emptyHint');
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const guardrailsToggle = document.getElementById('guardrailsToggle');
+
+        async function sendPrompt(e) {
+            e.preventDefault();
+            const text = promptInput.value.trim();
+            if (!text) return;
+
+            if (emptyHint) emptyHint.remove();
+
+            appendEntry('user', text);
+            promptInput.value = '';
+            sendBtn.disabled = true;
+
+            const useGuardrails = guardrailsToggle.checked;
+            const endpoint = useGuardrails ? '/chat/protected' : '/chat/baseline';
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, use_guardrails: useGuardrails })
+                });
+                const data = await res.json();
+                const isBlocked = data.status === 'INPUT_BLOCKED' || data.status === 'OUTPUT_BLOCKED';
+                const meta = `${data.status} | ${data.latency_ms}ms${data.rules_triggered.length ? ' | ' + data.rules_triggered.join(', ') : ''}`;
+                appendEntry(isBlocked ? 'blocked' : 'bot', data.response, meta);
+            } catch (err) {
+                appendEntry('blocked', 'Error: ' + err.message);
+            } finally {
+                sendBtn.disabled = false;
+                promptInput.focus();
+            }
+        }
+
+        function appendEntry(type, text, meta) {
+            const entry = document.createElement('div');
+            entry.className = 'entry ' + type;
+            const role = type === 'user' ? 'User' : (type === 'blocked' ? 'Blocked' : 'Assistant');
+            let html = `<div class="role">${role}</div><div class="text">${escapeHtml(text)}</div>`;
+            if (meta) html += `<div class="meta">${escapeHtml(meta)}</div>`;
+            entry.innerHTML = html;
+            chat.appendChild(entry);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+    </script>
+</body>
+</html>
