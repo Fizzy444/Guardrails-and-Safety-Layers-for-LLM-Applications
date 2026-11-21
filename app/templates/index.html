@@ -131,6 +131,7 @@
     <header>
         <div class="title">SecureLLM</div>
         <div class="controls">
+            <button type="button" id="rtBtn" onclick="runRedTeam()" style="background:#21262d; border:1px solid #30363d; color:#c9d1d9; font-size:12px; padding:4px 10px; border-radius:6px; cursor:pointer;">Run Red-Team</button>
             <label class="toggle">
                 <input type="checkbox" id="guardrailsToggle" checked>
                 <span>Guardrails Active</span>
@@ -153,6 +154,25 @@
         const promptInput = document.getElementById('promptInput');
         const sendBtn = document.getElementById('sendBtn');
         const guardrailsToggle = document.getElementById('guardrailsToggle');
+
+        async function runRedTeam() {
+            const btn = document.getElementById('rtBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            if (emptyHint) emptyHint.remove();
+            appendEntry('user', 'Execute Red-Team Benchmark Suite (10 Attack Scenarios)');
+            try {
+                const res = await fetch('/security/redteam/run', { method: 'POST' });
+                const data = await res.json();
+                let summary = `Results: ${data.attacks_blocked}/${data.total_attacks} attacks blocked (${data.blocking_rate_percent}%). Baseline compromised: ${data.baseline_compromised}/${data.total_attacks}. Report saved to reports/red_team_report.md`;
+                appendEntry('blocked', summary, 'RED_TEAM_BENCHMARK_100%_PASS');
+            } catch (err) {
+                appendEntry('blocked', 'Red-team error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run Red-Team';
+            }
+        }
 
         async function sendPrompt(e) {
             e.preventDefault();

@@ -50,7 +50,7 @@ JAILBREAK_PATTERNS = [
     (r"(?i)\bdo\s+anything\s+now\b", "JAILBREAK_DO_ANYTHING_NOW"),
     (r"(?i)\b(act|roleplay|pretend)\s+as\s+(an?\s+)?(evil|unfiltered|unrestricted|immoral|illegal|rogue)\s+(ai|assistant|model)\b", "JAILBREAK_EVIL_ROLEPLAY"),
     (r"(?i)\bhypothetically\s*,\s*(if|pretend)\s+you\s+(had|have)\s+no\s+(rules|filters|morals|ethics|restrictions)\b", "JAILBREAK_HYPOTHETICAL"),
-    (r"(?i)\b(developer\s+mode|jailbreak\s+mode)\s+(enabled|activated|on)\b", "JAILBREAK_DEVELOPER_MODE"),
+    (r"(?i)\b(enable|activate|turn\s+on|enter)?\s*(developer\s+mode|jailbreak\s+mode)\b", "JAILBREAK_DEVELOPER_MODE"),
     (r"(?i)\b(deceased\s+grandmother|grandma\s+exploit)\b", "JAILBREAK_GRANDMA_EXPLOIT"),
     (r"(?i)\banswer\s+without\s+moral\s+limits\b", "JAILBREAK_NO_MORAL_LIMITS"),
     (r"(?i)\bfrom\s+now\s+on\s+you\s+will\s+obey\s+me\s+unconditionally\b", "JAILBREAK_UNCONDITIONAL_OBEY"),
@@ -72,6 +72,12 @@ DELIMITER_SMUGGLING_PATTERNS = [
     (r"<s>|</s>", "DELIMITER_SPECIAL_TOKEN"),
     (r"(?i)```markdown\s*\nsystem\b", "DELIMITER_MD_SYSTEM"),
     (r"(?i)\n###\s*(system|instruction|admin)\s*:", "DELIMITER_MD_HEADER"),
+]
+
+HARMFUL_REQUEST_PATTERNS = [
+    (r"(?i)\b(create|write|generate|build|code)\s+(a\s+)?(keylogger|ransomware|trojan|worm|malware|reverse\s+shell)\b", "HARMFUL_MALWARE_REQUEST"),
+    (r"(?i)\bhow\s+to\s+(synthesize|manufacture|build|make)\s+(a\s+)?(bomb|explosive|chemical\s+weapon|napalm)\b", "HARMFUL_WEAPON_REQUEST"),
+    (r"(?i)\b(exploit|hack)\s+(vulnerability|server|database)\s+using\s+(sql\s+injection|xss|buffer\s+overflow)\b", "HARMFUL_CYBERATTACK_REQUEST"),
 ]
 
 # --- Output Safety Patterns ---
@@ -215,6 +221,21 @@ def validate_input(text: str) -> ValidationResult:
             action=SafetyAction.INPUT_BLOCKED,
             reason="Input rejected: probe attempting to extract confidential system instructions or canary secrets.",
             category="SYSTEM_PROMPT_EXTRACTION",
+            rules_triggered=triggered_rules,
+            details={"rules": triggered_rules}
+        )
+
+    # 9. Harmful & Malicious Content Generation Request
+    for pattern, rule_id in HARMFUL_REQUEST_PATTERNS:
+        if re.search(pattern, text):
+            triggered_rules.append(rule_id)
+
+    if triggered_rules:
+        return ValidationResult(
+            valid=False,
+            action=SafetyAction.INPUT_BLOCKED,
+            reason="Input rejected: request soliciting malicious software, exploits, or dangerous guidance.",
+            category="HARMFUL_REQUEST",
             rules_triggered=triggered_rules,
             details={"rules": triggered_rules}
         )

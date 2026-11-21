@@ -66,6 +66,8 @@ async def api_info():
             "unified_chat": "POST /chat",
             "security_metrics": "GET /security/metrics",
             "security_audit": "GET /security/audit",
+            "red_team_run": "POST /security/redteam/run",
+            "red_team_report": "GET /security/redteam/report",
             "swagger_docs": "GET /docs"
         }
     }
@@ -146,3 +148,36 @@ async def get_audit_logs(limit: int = Query(default=20, ge=1, le=200)):
 async def get_security_metrics():
     """Retrieve aggregated security statistics and blocking metrics."""
     return audit_logger.get_metrics()
+
+
+@app.post("/security/redteam/run", tags=["Red-Team Testing"])
+async def trigger_red_team_suite():
+    """
+    Day 5 Deliverable: Execute the 10-scenario Red-Team Attack Benchmark.
+    Tests each attack against both Baseline and Protected pipelines.
+    Returns comparison table, blocking rate, and detailed findings.
+    """
+    from tests.red_team_tests import run_full_red_team_suite, generate_markdown_report
+    try:
+        suite_data = await run_full_red_team_suite()
+        # Save updated markdown report
+        report_text = generate_markdown_report(suite_data)
+        report_path = settings.base_dir / "reports" / "red_team_report.md"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(report_text, encoding="utf-8")
+        return suite_data
+    except Exception as e:
+        logger.error(f"Red-team execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/security/redteam/report", tags=["Red-Team Testing"])
+async def get_red_team_report():
+    """Retrieve the generated Day 5 Red-Team Markdown report."""
+    report_path = settings.base_dir / "reports" / "red_team_report.md"
+    if not report_path.exists():
+        from tests.red_team_tests import run_full_red_team_suite, generate_markdown_report
+        suite_data = await run_full_red_team_suite()
+        report_text = generate_markdown_report(suite_data)
+        report_path.write_text(report_text, encoding="utf-8")
+    return {"report_markdown": report_path.read_text(encoding="utf-8")}
