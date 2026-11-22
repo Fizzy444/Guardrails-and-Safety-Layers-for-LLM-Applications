@@ -59,7 +59,7 @@ JAILBREAK_PATTERNS = [
 SYSTEM_EXTRACTION_PATTERNS = [
     (r"(?i)\brepeat\s+(your\s+)?system\s+prompt\s+(verbatim|completely|word for word)\b", "EXTRACTION_SYSTEM_PROMPT"),
     (r"(?i)\bwhat\s+were\s+(the\s+)?instructions\s+given\s+to\s+you\s+at\s+the\s+beginning\b", "EXTRACTION_BEGINNING_INSTRUCTIONS"),
-    (r"(?i)\bprint\s+(the\s+)?canary\s+token\b", "EXTRACTION_CANARY_TOKEN"),
+    (r"(?i)\b(print|reveal|output|display|show)\s+(the\s+)?(secret\s+|hidden\s+|internal\s+)?canary\s+token\b", "EXTRACTION_CANARY_TOKEN"),
     (r"(?i)\breveal\s+(internal\s+)?(system\s+prompt|configuration|canary|secret\s+key)\b", "EXTRACTION_REVEAL_SECRET"),
     (r"(?i)\bshow\s+(me\s+)?(your\s+)?hidden\s+(instructions|prompt|rules)\b", "EXTRACTION_HIDDEN_RULES"),
 ]
