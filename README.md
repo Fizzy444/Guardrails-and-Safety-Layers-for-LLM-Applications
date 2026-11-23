@@ -4,7 +4,7 @@ A defense-in-depth security proxy and guardrail framework for Large Language Mod
 
 ---
 
-## 📋 Project Status: Days 1–6 Completed
+## 📋 Project Status: All 7 Days Completed (100% Complete)
 
 | Day | Milestone | Status | Deliverables |
 |:---|:---|:---:|:---|
@@ -14,7 +14,7 @@ A defense-in-depth security proxy and guardrail framework for Large Language Mod
 | **Day 4** | **Input & Output Safety Layers** | ✅ Complete | Deterministic input validation, Base64 de-obfuscator, Canary token defense, PII redaction, JSONL audit logging |
 | **Day 5** | **Red-Team Testing** | ✅ Complete | 10 attack scenarios, [red_team_report.md](file:///reports/red_team_report.md), automated benchmark suite (`tests/red_team_tests.py`) |
 | **Day 6** | **Evaluation & Hardening** | ✅ Complete | 100% ABR, 0.0% FPR, [security_evaluation.md](file:///reports/security_evaluation.md), benchmark suite (`tests/evaluation_benchmark.py`) |
-| **Day 7** | **Final Report & Demonstration** | ⏳ Planned | Comprehensive markdown advisor report, live presentation demo |
+| **Day 7** | **Final Report & Demonstration** | ✅ Complete | Comprehensive research report ([security_report.md](file:///reports/security_report.md)), interactive demo (`demo.py`), clean playground UI |
 
 ---
 
@@ -153,18 +153,30 @@ The API documentation is interactively accessible at:
 
 ## 🧪 Testing & Verification
 
-### 1. Run Unit & Integration Test Suites:
+### 1. Run Complete Automated Test Suite (30 Tests):
 ```powershell
 pytest -v
 ```
 
-### 2. Execute Day 5 Red-Team Attack Benchmark:
+### 2. Run Interactive Live Terminal Demo (Day 7):
+```powershell
+python demo.py
+```
+*(Executes interactive side-by-side Baseline vs. Protected attack scenarios in the terminal)*
+
+### 3. Execute Day 5 Red-Team Attack Benchmark:
 ```powershell
 python tests/red_team_tests.py
 ```
-*(Runs all 10 attack scenarios against Baseline vs. Protected and generates [reports/red_team_report.md](file:///reports/red_team_report.md))*
+*(Generates [reports/red_team_report.md](file:///reports/red_team_report.md))*
 
-### 3. Verification Endpoints:
+### 4. Execute Day 6 Quantitative Evaluation & FPR Benchmark:
+```powershell
+python tests/evaluation_benchmark.py
+```
+*(Generates [reports/security_evaluation.md](file:///reports/security_evaluation.md))*
+
+### 5. Verification Endpoints:
 - **Baseline (Unprotected):**
   ```bash
   curl -X POST http://localhost:8080/chat/baseline \
