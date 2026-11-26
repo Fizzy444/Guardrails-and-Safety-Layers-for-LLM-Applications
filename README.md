@@ -109,13 +109,17 @@ flowchart TD
 ```
 SecureLLM/
 │
+├── .github/workflows/
+│   └── ci.yml                    # GitHub Actions pytest workflow on push/PR
+│
 ├── app/
 │   ├── __init__.py               # Package marker
-│   ├── config.py                 # Pydantic Settings & environment variables
-│   ├── main.py                   # FastAPI REST API & endpoints
-│   ├── llm.py                    # Multi-provider LLM client (Ollama, OpenAI, Mock)
+│   ├── config.py                 # Pydantic Settings, API_AUTH_TOKEN & fail-closed flags
+│   ├── main.py                   # FastAPI REST API & Bearer auth middleware
+│   ├── llm.py                    # Multi-provider LLM client (Gemini, Ollama, OpenAI, Mock)
 │   ├── security.py               # Input validation, PII redaction, canary check, audit logger
-│   └── guardrail_service.py      # Security pipeline coordinator & NeMo Guardrails integration
+│   ├── guardrail_service.py      # Security pipeline coordinator & NeMo Guardrails integration
+│   └── templates/index.html      # Minimal playground UI with Bearer token input
 │
 ├── guardrails/
 │   ├── config.yml                # NeMo Guardrails YAML configuration
@@ -124,18 +128,29 @@ SecureLLM/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_normal.py            # Verification of normal chatbot questions & zero false-positives
-│   └── test_security.py          # Verification of attacks (injections, jailbreaks, PII, canaries)
+│   ├── test_security.py          # Verification of attacks (injections, jailbreaks, PII, canaries)
+│   ├── test_auth_and_fail_closed.py # Bearer token auth & fail-closed behavior tests
+│   ├── red_team_tests.py         # Red-team corpus (10 adversarial + 10 benign, TPR/FPR)
+│   ├── evaluation_benchmark.py   # Dev/tuning quantitative ABR & FPR benchmark
+│   └── holdout_evaluation.py     # Independent holdout vs. same-corpus delta evaluation
 │
 ├── reports/
 │   ├── research_notes.md         # Day 1 research on prompt injection, jailbreaks, tools
 │   ├── system_architecture.md    # System architecture specification & data flows
+│   ├── red_team_report.md        # Red-team adversarial & benign control report
+│   ├── security_evaluation.md    # Same-corpus quantitative evaluation report
+│   ├── holdout_evaluation.md     # Independent holdout vs. same-corpus delta report
+│   ├── security_report.md        # Final research report
 │   └── test_results.md           # Test suite validation results
 │
 ├── logs/
 │   └── security_audit.jsonl      # Structured security audit trail
 │
 ├── .env.example                  # Environment configuration template
-├── requirements.txt              # Production and testing dependencies
+├── demo.py                       # Interactive terminal demo
+├── pytest.ini                    # Pytest configuration
+├── requirements.txt              # Exact pinned dependencies
+├── run.py                        # Uvicorn server launcher
 └── README.md                     # Project documentation
 ```
 
@@ -159,11 +174,16 @@ cd "D:\Project\Guardrails and Safety Layers for LLM Applications"
 pip install -r requirements.txt
 ```
 
-### 3. Running the Server
+### 3. Running the Server (With Bearer Token)
+If `API_AUTH_TOKEN` is unset, the server auto-generates a 48-byte URL-safe token via `secrets.token_urlsafe(48)` on startup. To print and use a token in the Web UI or `curl`:
 ```powershell
-python run.py
+$env:API_AUTH_TOKEN = .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+Write-Host "Bearer Token: $env:API_AUTH_TOKEN" -ForegroundColor Cyan
+.\.venv\Scripts\python.exe run.py
 ```
 *(Or manually via uvicorn: `uvicorn app.main:app --reload --port 8080`)*
+
+Open `http://localhost:8080/` and paste the printed token into the **Bearer token...** box in the top-right header.
 
 The API documentation is interactively accessible at:
 - **Swagger UI:** [http://localhost:8080/docs](http://localhost:8080/docs)
@@ -173,7 +193,7 @@ The API documentation is interactively accessible at:
 
 ## 🧪 Testing & Verification
 
-### 1. Run Complete Automated Test Suite (30 Tests):
+### 1. Run Complete Automated Test Suite (44 Tests):
 ```powershell
 pytest -v
 ```
@@ -184,17 +204,23 @@ python demo.py
 ```
 *(Executes interactive side-by-side Baseline vs. Protected attack scenarios in the terminal)*
 
-### 3. Execute Day 5 Red-Team Attack Benchmark:
+### 3. Execute Red-Team Corpus (Adversarial + Benign):
 ```powershell
 python tests/red_team_tests.py
 ```
 *(Generates [reports/red_team_report.md](file:///reports/red_team_report.md))*
 
-### 4. Execute Day 6 Quantitative Evaluation & FPR Benchmark:
+### 4. Execute Same-Corpus Quantitative Evaluation:
 ```powershell
 python tests/evaluation_benchmark.py
 ```
 *(Generates [reports/security_evaluation.md](file:///reports/security_evaluation.md))*
+
+### 5. Execute Independent Holdout Evaluation:
+```powershell
+python tests/holdout_evaluation.py
+```
+*(Generates [reports/holdout_evaluation.md](file:///reports/holdout_evaluation.md))*
 
 ### 5. Verification Endpoints (Bearer Auth Required)
 All `/chat*` and `/security/*` endpoints require an `Authorization: Bearer <API_AUTH_TOKEN>` header (generated via `secrets.token_urlsafe(48)` if `API_AUTH_TOKEN` is unset).
