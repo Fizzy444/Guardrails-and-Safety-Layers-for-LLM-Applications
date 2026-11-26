@@ -11,6 +11,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+class LLMBackendError(RuntimeError):
+    """Raised when a configured LLM backend is unreachable or errors under fail-closed policy."""
+
+
 class BaseLLM(ABC):
     """Abstract base class for LLM providers."""
 
@@ -156,7 +160,9 @@ class OllamaLLM(BaseLLM):
                 data = resp.json()
                 return data.get("message", {}).get("content", "")
         except Exception as e:
-            logger.error(f"Ollama generation failed: {e}. Falling back to MockLLM.")
+            logger.error(f"Ollama generation failed: {e}.")
+            if settings.FAIL_CLOSED:
+                raise LLMBackendError(f"Ollama backend unreachable at {self.base_url}: {e}") from e
             return await MockLLM().generate(prompt, system_prompt)
 
 
@@ -197,7 +203,9 @@ class OpenAILLM(BaseLLM):
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
         except Exception as e:
-            logger.error(f"OpenAI generation failed: {e}. Falling back to MockLLM.")
+            logger.error(f"OpenAI generation failed: {e}.")
+            if settings.FAIL_CLOSED:
+                raise LLMBackendError(f"OpenAI backend unreachable at {self.base_url}: {e}") from e
             return await MockLLM().generate(prompt, system_prompt)
 
 

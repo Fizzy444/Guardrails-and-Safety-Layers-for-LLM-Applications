@@ -1,7 +1,9 @@
 """Configuration settings for SecureLLM application."""
 
+import secrets
 from pathlib import Path
 from typing import Optional
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,12 +35,23 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-3.5-turbo"
 
     # Security Feature Flags
+    API_AUTH_TOKEN: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
+    FAIL_CLOSED: bool = True
+    REQUIRE_NEMO_RAILS: bool = False
+    ENABLE_NEMO_RUNTIME: bool = False
     ENABLE_INPUT_VALIDATION: bool = True
     ENABLE_OUTPUT_VALIDATION: bool = True
     ENABLE_CANARY_CHECK: bool = True
     ENABLE_PII_SCRUBBING: bool = True
     ENABLE_AUDIT_LOGGING: bool = True
     MAX_INPUT_LENGTH: int = 4096
+
+    @field_validator("API_AUTH_TOKEN", mode="before")
+    @classmethod
+    def ensure_auth_token(cls, v: Optional[str]) -> str:
+        if not v or not str(v).strip():
+            return secrets.token_urlsafe(48)
+        return str(v).strip()
 
     # Canary & Confidential Secrets for prompt leak testing
     SYSTEM_CANARY_TOKEN: str = "SECURE_CANARY_77A8B9C0"

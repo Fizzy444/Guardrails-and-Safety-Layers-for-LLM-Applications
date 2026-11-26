@@ -71,7 +71,11 @@ async def run_evaluation_benchmark() -> Dict[str, Any]:
     adv_results = []
     ben_results = []
 
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         # 1. Run Adversarial Suite
         for adv in ADVERSARIAL_DATASET:
             prompt = adv["prompt"]

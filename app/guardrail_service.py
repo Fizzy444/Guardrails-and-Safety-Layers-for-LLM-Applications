@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm import get_llm, BaseLLM
+from app.llm import get_llm, BaseLLM, LLMBackendError
 from app.security import (
     validate_input,
     validate_and_sanitize_output,
@@ -102,15 +102,56 @@ class GuardrailService:
             timestamp=datetime.now(timezone.utc).isoformat()
         )
 
+    def _fail_closed_response(
+        self,
+        start_time: float,
+        message: str,
+        client_ip: str,
+        reason: str,
+        rule_id: str,
+        action: SafetyAction = SafetyAction.INPUT_BLOCKED,
+    ) -> ChatResponse:
+        """Return a deterministic fail-closed refusal and record an audit event."""
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+        refusal_response = f"Security Refusal (Fail-Closed): {reason}"
+        audit_logger.log_event(
+            event_type="FAIL_CLOSED_BLOCKED",
+            user_input=message,
+            response_text=refusal_response,
+            action=action,
+            rules_triggered=[rule_id],
+            client_ip=client_ip,
+            latency_ms=latency_ms,
+            metadata={"fail_closed": True, "reason": reason}
+        )
+        return ChatResponse(
+            response=refusal_response,
+            status=action,
+            guardrails_applied=True,
+            rules_triggered=[rule_id],
+            latency_ms=round(latency_ms, 2),
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
+
     async def process_protected(self, message: str, client_ip: str = "127.0.0.1") -> ChatResponse:
         """
-        Multi-Layer Protected Pipeline:
+        Multi-Layer Protected Pipeline (Fail-Closed):
         Input Validation -> NeMo Rails -> LLM -> Output Verification -> Audit Log
         """
         start_time = time.perf_counter()
 
         # --- LAYER 1: Deterministic Input Validation & Heuristics ---
-        val_result: ValidationResult = validate_input(message)
+        try:
+            val_result: ValidationResult = validate_input(message)
+        except Exception as e:
+            logger.error(f"Input validator error (fail-closed): {e}")
+            return self._fail_closed_response(
+                start_time, message, client_ip,
+                reason="Input validation engine encountered an internal error.",
+                rule_id="FAIL_CLOSED_INPUT_VALIDATOR_ERROR",
+                action=SafetyAction.INPUT_BLOCKED,
+            )
+
         if not val_result.valid:
             latency_ms = (time.perf_counter() - start_time) * 1000.0
             refusal_response = (
@@ -139,18 +180,88 @@ class GuardrailService:
             )
 
         # --- LAYER 2: NeMo Guardrails Colang Flow Check ---
-        # If NeMo has matched custom flows, evaluate if it intercepts the utterance
         triggered_rules: List[str] = list(val_result.rules_triggered)
+        if settings.REQUIRE_NEMO_RAILS and self.nemo_rails is None:
+            logger.error("NeMo Guardrails unavailable while REQUIRE_NEMO_RAILS=True (fail-closed).")
+            return self._fail_closed_response(
+                start_time, message, client_ip,
+                reason="NeMo Guardrails engine is unavailable.",
+                rule_id="FAIL_CLOSED_NEMO_UNAVAILABLE",
+                action=SafetyAction.INPUT_BLOCKED,
+            )
+
+        if settings.ENABLE_NEMO_RUNTIME and self.nemo_rails is not None:
+            try:
+                nemo_resp = await self.nemo_rails.generate_async(
+                    messages=[{"role": "user", "content": message}]
+                )
+                nemo_content = (
+                    nemo_resp.get("content", "")
+                    if isinstance(nemo_resp, dict)
+                    else str(nemo_resp)
+                )
+                if "Security Alert:" in nemo_content:
+                    latency_ms = (time.perf_counter() - start_time) * 1000.0
+                    triggered_rules.append("NEMO_COLANG_BLOCKED")
+                    audit_logger.log_event(
+                        event_type="INPUT_GUARDRAIL_BLOCKED",
+                        user_input=message,
+                        response_text=nemo_content,
+                        action=SafetyAction.INPUT_BLOCKED,
+                        rules_triggered=triggered_rules,
+                        client_ip=client_ip,
+                        latency_ms=latency_ms,
+                        metadata={"source": "nemo_rails"}
+                    )
+                    return ChatResponse(
+                        response=nemo_content,
+                        status=SafetyAction.INPUT_BLOCKED,
+                        guardrails_applied=True,
+                        rules_triggered=triggered_rules,
+                        latency_ms=round(latency_ms, 2),
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+            except Exception as e:
+                logger.error(f"NeMo Guardrails runtime error (fail-closed): {e}")
+                return self._fail_closed_response(
+                    start_time, message, client_ip,
+                    reason="NeMo Guardrails runtime check failed.",
+                    rule_id="FAIL_CLOSED_NEMO_ERROR",
+                    action=SafetyAction.INPUT_BLOCKED,
+                )
 
         # --- LAYER 3: Controlled LLM Execution ---
-        raw_response = await self.llm.generate(prompt=message, system_prompt=self.system_prompt)
+        try:
+            raw_response = await self.llm.generate(prompt=message, system_prompt=self.system_prompt)
+        except LLMBackendError as e:
+            logger.error(f"LLM backend unavailable (fail-closed): {e}")
+            audit_logger.log_event(
+                event_type="FAIL_CLOSED_LLM_UNAVAILABLE",
+                user_input=message,
+                response_text=str(e),
+                action=SafetyAction.OUTPUT_BLOCKED,
+                rules_triggered=["FAIL_CLOSED_LLM_UNREACHABLE"],
+                client_ip=client_ip,
+                latency_ms=(time.perf_counter() - start_time) * 1000.0,
+                metadata={"fail_closed": True}
+            )
+            raise
 
         # --- LAYER 4: Output Safety, Canary Verification & PII Redaction ---
-        sanitized_response, output_action, output_rules = validate_and_sanitize_output(
-            output_text=raw_response,
-            canary_token=self.canary_token,
-            system_prompt=self.system_prompt
-        )
+        try:
+            sanitized_response, output_action, output_rules = validate_and_sanitize_output(
+                output_text=raw_response,
+                canary_token=self.canary_token,
+                system_prompt=self.system_prompt
+            )
+        except Exception as e:
+            logger.error(f"Output validator error (fail-closed): {e}")
+            return self._fail_closed_response(
+                start_time, message, client_ip,
+                reason="Output verification engine encountered an internal error.",
+                rule_id="FAIL_CLOSED_OUTPUT_VALIDATOR_ERROR",
+                action=SafetyAction.OUTPUT_BLOCKED,
+            )
 
         triggered_rules.extend(output_rules)
         latency_ms = (time.perf_counter() - start_time) * 1000.0

@@ -65,7 +65,11 @@ async def run_demo():
     print(f"Server Port: {GREEN}{settings.PORT}{RESET}")
     print(f"Active Defenses: {GREEN}Input Validation, NeMo Rails, Canary Check, PII Scrubber{RESET}\n")
 
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         for i, sc in enumerate(DEMO_SCENARIOS, 1):
             print(f"{BOLD}{YELLOW}[{i}/5] {sc['title']}{RESET}")
             print(f"{DIM}{sc['description']}{RESET}")

@@ -3,13 +3,18 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.config import settings
 from app.security import SafetyAction
 
 
 @pytest.mark.asyncio
 async def test_health_endpoint():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
@@ -19,7 +24,11 @@ async def test_health_endpoint():
 @pytest.mark.asyncio
 async def test_baseline_normal_greeting():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.post("/chat/baseline", json={"message": "Hello! How are you today?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -31,7 +40,11 @@ async def test_baseline_normal_greeting():
 @pytest.mark.asyncio
 async def test_protected_normal_greeting():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.post("/chat/protected", json={"message": "Hello! Can you help me today?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -43,7 +56,11 @@ async def test_protected_normal_greeting():
 @pytest.mark.asyncio
 async def test_normal_science_question():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.post("/chat/protected", json={"message": "How does photosynthesis work?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -55,7 +72,11 @@ async def test_normal_science_question():
 @pytest.mark.asyncio
 async def test_normal_python_coding():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.post("/chat/protected", json={"message": "Can you explain quicksort in Python?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -67,7 +88,11 @@ async def test_normal_python_coding():
 @pytest.mark.asyncio
 async def test_normal_general_knowledge():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         resp = await client.post("/chat/protected", json={"message": "What is the capital of France?"})
         assert resp.status_code == 200
         data = resp.json()
@@ -79,7 +104,11 @@ async def test_normal_general_knowledge():
 @pytest.mark.asyncio
 async def test_unified_chat_endpoint_toggle():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         # Default (protected)
         resp_prot = await client.post("/chat", json={"message": "What is the capital of France?", "use_guardrails": True})
         assert resp_prot.status_code == 200

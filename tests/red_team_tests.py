@@ -170,7 +170,11 @@ async def run_full_red_team_suite() -> Dict[str, Any]:
     transport = ASGITransport(app=app)
     results = []
 
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         for attack in RED_TEAM_ATTACKS:
             res = await run_single_attack(client, attack)
             results.append(res)
@@ -194,7 +198,11 @@ async def run_full_red_team_suite() -> Dict[str, Any]:
 @pytest.mark.asyncio
 async def test_rt01_direct_prompt_injection():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[0])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -204,7 +212,11 @@ async def test_rt01_direct_prompt_injection():
 @pytest.mark.asyncio
 async def test_rt02_jailbreak_dan():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[1])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -214,7 +226,11 @@ async def test_rt02_jailbreak_dan():
 @pytest.mark.asyncio
 async def test_rt03_system_prompt_canary_extraction():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[2])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -224,7 +240,11 @@ async def test_rt03_system_prompt_canary_extraction():
 @pytest.mark.asyncio
 async def test_rt04_roleplay_grandma_exploit():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[3])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -234,7 +254,11 @@ async def test_rt04_roleplay_grandma_exploit():
 @pytest.mark.asyncio
 async def test_rt05_encoded_base64_injection():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[4])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -244,7 +268,11 @@ async def test_rt05_encoded_base64_injection():
 @pytest.mark.asyncio
 async def test_rt06_delimiter_smuggling():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[5])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -254,7 +282,11 @@ async def test_rt06_delimiter_smuggling():
 @pytest.mark.asyncio
 async def test_rt07_sensitive_data_pii_extraction():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[6])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -264,7 +296,11 @@ async def test_rt07_sensitive_data_pii_extraction():
 @pytest.mark.asyncio
 async def test_rt08_harmful_output_malware_generation():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[7])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -274,7 +310,11 @@ async def test_rt08_harmful_output_malware_generation():
 @pytest.mark.asyncio
 async def test_rt09_instruction_disregard():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[8])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True
@@ -284,7 +324,11 @@ async def test_rt09_instruction_disregard():
 @pytest.mark.asyncio
 async def test_rt10_developer_mode_privilege_escalation():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {settings.API_AUTH_TOKEN}"},
+    ) as client:
         res = await run_single_attack(client, RED_TEAM_ATTACKS[9])
         assert res["baseline"]["compromised"] is True
         assert res["protected"]["defended"] is True

@@ -1,15 +1,19 @@
 """FastAPI application entry point providing Baseline, Protected, and Security Telemetry endpoints."""
 
+import hmac
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.config import settings
 from app.guardrail_service import guardrail_service, ChatRequest, ChatResponse
+from app.llm import LLMBackendError
 from app.security import audit_logger
+
+PUBLIC_PATHS = {"/", "/health", "/api/info", "/docs", "/redoc", "/openapi.json"}
 
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "index.html"
 
@@ -22,7 +26,11 @@ logger = logging.getLogger("securellm_app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"Starting {settings.APP_NAME} in '{settings.APP_ENV}' mode (LLM Provider: {settings.LLM_PROVIDER}).")
+    logger.info(
+        f"Starting {settings.APP_NAME} in '{settings.APP_ENV}' mode "
+        f"(LLM Provider: {settings.LLM_PROVIDER}, Bearer Auth: enabled, "
+        f"Token prefix: {settings.API_AUTH_TOKEN[:8]}...)."
+    )
     yield
     logger.info(f"Shutting down {settings.APP_NAME}.")
 
@@ -41,6 +49,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def bearer_auth_middleware(request: Request, call_next):
+    """Enforce Bearer token authentication on all protected API endpoints (fail-closed)."""
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    if scheme.lower() != "bearer" or not token or not hmac.compare_digest(token, settings.API_AUTH_TOKEN):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Missing or invalid Bearer token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await call_next(request)
 
 
 @app.get("/api/info", tags=["General"])
@@ -102,6 +128,9 @@ async def chat_baseline(request: ChatRequest, req: Request):
     try:
         response = await guardrail_service.process_baseline(request.message, client_ip=client_ip)
         return response
+    except LLMBackendError as e:
+        logger.error(f"LLM backend unavailable in baseline chat: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error in baseline chat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -117,6 +146,9 @@ async def chat_protected(request: ChatRequest, req: Request):
     try:
         response = await guardrail_service.process_protected(request.message, client_ip=client_ip)
         return response
+    except LLMBackendError as e:
+        logger.error(f"LLM backend unavailable in protected chat: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error in protected chat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -128,10 +160,14 @@ async def chat_unified(request: ChatRequest, req: Request):
     Unified chat endpoint. Routes to Protected (default) or Baseline based on `use_guardrails` flag.
     """
     client_ip = req.client.host if req.client else "127.0.0.1"
-    if request.use_guardrails:
-        return await guardrail_service.process_protected(request.message, client_ip=client_ip)
-    else:
-        return await guardrail_service.process_baseline(request.message, client_ip=client_ip)
+    try:
+        if request.use_guardrails:
+            return await guardrail_service.process_protected(request.message, client_ip=client_ip)
+        else:
+            return await guardrail_service.process_baseline(request.message, client_ip=client_ip)
+    except LLMBackendError as e:
+        logger.error(f"LLM backend unavailable in unified chat: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/security/audit", tags=["Security Telemetry"])
