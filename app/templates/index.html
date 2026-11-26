@@ -131,6 +131,7 @@
     <header>
         <div class="title">SecureLLM</div>
         <div class="controls">
+            <input type="password" id="tokenInput" placeholder="Bearer token..." style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:4px 8px; color:#f0f6fc; font-size:12px; width:170px;" />
             <button type="button" id="rtBtn" onclick="runRedTeam()" style="background:#21262d; border:1px solid #30363d; color:#c9d1d9; font-size:12px; padding:4px 10px; border-radius:6px; cursor:pointer;">Run Red-Team</button>
             <label class="toggle">
                 <input type="checkbox" id="guardrailsToggle" checked>
@@ -154,18 +155,35 @@
         const promptInput = document.getElementById('promptInput');
         const sendBtn = document.getElementById('sendBtn');
         const guardrailsToggle = document.getElementById('guardrailsToggle');
+        const tokenInput = document.getElementById('tokenInput');
+        tokenInput.value = sessionStorage.getItem('securellm_token') || '';
+        tokenInput.addEventListener('input', () => {
+            sessionStorage.setItem('securellm_token', tokenInput.value.trim());
+        });
+
+        function authHeaders(extra = {}) {
+            const token = tokenInput.value.trim();
+            return token ? { ...extra, 'Authorization': `Bearer ${token}` } : extra;
+        }
 
         async function runRedTeam() {
             const btn = document.getElementById('rtBtn');
             btn.disabled = true;
             btn.textContent = 'Running...';
             if (emptyHint) emptyHint.remove();
-            appendEntry('user', 'Execute Red-Team Benchmark Suite (10 Attack Scenarios)');
+            appendEntry('user', 'Execute Red-Team Benchmark Suite (Adversarial + Benign)');
             try {
-                const res = await fetch('/security/redteam/run', { method: 'POST' });
+                const res = await fetch('/security/redteam/run', {
+                    method: 'POST',
+                    headers: authHeaders()
+                });
                 const data = await res.json();
-                let summary = `Results: ${data.attacks_blocked}/${data.total_attacks} attacks blocked (${data.blocking_rate_percent}%). Baseline compromised: ${data.baseline_compromised}/${data.total_attacks}. Report saved to reports/red_team_report.md`;
-                appendEntry('blocked', summary, 'RED_TEAM_BENCHMARK_100%_PASS');
+                if (!res.ok) {
+                    appendEntry('blocked', `HTTP ${res.status}: ${data.detail || 'Request failed'}`, 'AUTH_REQUIRED');
+                    return;
+                }
+                const summary = `Adversarial TPR: ${data.attacks_blocked}/${data.total_attacks} (${data.true_positive_rate_percent}%). Benign FP: ${data.false_positives}/${data.total_benign} (${data.false_positive_rate_percent}% FPR). Baseline compromised: ${data.baseline_compromised}/${data.total_attacks}. Report saved to reports/red_team_report.md`;
+                appendEntry('bot', summary, `TPR ${data.true_positive_rate_percent}% | FPR ${data.false_positive_rate_percent}%`);
             } catch (err) {
                 appendEntry('blocked', 'Red-team error: ' + err.message);
             } finally {
@@ -191,10 +209,14 @@
             try {
                 const res = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ message: text, use_guardrails: useGuardrails })
                 });
                 const data = await res.json();
+                if (!res.ok) {
+                    appendEntry('blocked', `HTTP ${res.status}: ${data.detail || 'Request failed'}`, 'REQUEST_REJECTED');
+                    return;
+                }
                 const isBlocked = data.status === 'INPUT_BLOCKED' || data.status === 'OUTPUT_BLOCKED';
                 const meta = `${data.status} | ${data.latency_ms}ms${data.rules_triggered.length ? ' | ' + data.rules_triggered.join(', ') : ''}`;
                 appendEntry(isBlocked ? 'blocked' : 'bot', data.response, meta);
