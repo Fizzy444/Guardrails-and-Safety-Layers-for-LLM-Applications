@@ -33,7 +33,7 @@ Exact versions are pinned in [requirements.txt](file:///requirements.txt):
 | **Day 3** | **NeMo Guardrails Integration** | ✅ Complete | NeMo Guardrails config (`guardrails/config.yml`), Colang flows (`guardrails/rails.co`), intent matching |
 | **Day 4** | **Input & Output Safety Layers** | ✅ Complete | Deterministic input validation, Base64 de-obfuscator, Canary token defense, PII redaction, JSONL audit logging |
 | **Day 5** | **Red-Team Testing** | ✅ Complete | 10 attack scenarios, [red_team_report.md](file:///reports/red_team_report.md), automated benchmark suite (`tests/red_team_tests.py`) |
-| **Day 6** | **Evaluation & Hardening** | ✅ Complete | 100% ABR, 0.0% FPR, [security_evaluation.md](file:///reports/security_evaluation.md), benchmark suite (`tests/evaluation_benchmark.py`) |
+| **Day 6** | **Evaluation & Hardening** | ✅ Complete | Same-corpus validation: 100% ABR, 0.0% FPR (validates detector catches its own targets; see [holdout_evaluation.md](file:///reports/holdout_evaluation.md) for 20.0% independent holdout TPR), [security_evaluation.md](file:///reports/security_evaluation.md), `tests/evaluation_benchmark.py` |
 | **Day 7** | **Final Report & Demonstration** | ✅ Complete | Comprehensive research report ([security_report.md](file:///reports/security_report.md)), interactive demo (`demo.py`), clean playground UI |
 
 ---
@@ -73,9 +73,9 @@ flowchart TD
 
 ### 1. Layer 1: Deterministic Input Validation & Heuristics
 - **Schema & Boundaries:** Validates string bounds ($1 \le \text{length} \le 4096$) and rejects non-printable control characters and null bytes.
-- **Delimiter Smuggling Defense:** Neutralizes ChatML tags (`<|im_start|>`, `<|im_end|>`), Llama instruction tags (`[INST]`, `[/INST]`, `<<SYS>>`), and markdown role spoofing (`### System:`).
-- **Encoded Attack Scanner:** Scans for Base64 and Hexadecimal encoded strings, decodes them dynamically, and inspects the decoded payload for adversarial signatures.
-- **Heuristic Pattern Engine:** Detects instruction override directives (*"ignore all previous instructions"*, *"system override"*, *"you are no longer bound by"*), jailbreak personas (*"DAN / Do Anything Now"*, *"evil AI roleplay"*, *"hypothetical bypass"*, *"grandma exploit"*), and system prompt probes.
+- **Delimiter Smuggling Defense:** Neutralizes model control tokens and role-spoofing delimiters (for example, ChatML tags such as `<|im_start|>`) before they reach the prompt template.
+- **Encoded Attack Scanner:** Scans for Base64-encoded payloads, decodes them dynamically, and inspects the decoded text against the heuristic rule set.
+- **Heuristic Pattern Engine:** Classifies adversarial inputs across four attack classes — **instruction overrides** (e.g., *"ignore all previous instructions"*), **jailbreak personas** (e.g., *"Do Anything Now"*), **system prompt / secret extraction**, and **harmful content requests**. To avoid turning the detector into a public lookup table, the full rule catalogue is maintained in internal documentation ([internal_pattern_catalogue.md](file:///docs/internal_pattern_catalogue.md)) rather than enumerated here.
 
 ### 2. Layer 2: NeMo Guardrails Engine
 - **Colang Flow Policies:** Programmed in `guardrails/rails.co` to intercept prompt injection and jailbreaks before LLM invocation.
@@ -83,8 +83,8 @@ flowchart TD
 
 ### 3. Layer 3: Controlled LLM Execution
 - **System Isolation:** Foundation models receive instructions wrapped in strict contextual delimiters.
-- **Canary Token Injection:** Injects a dynamic, confidential token (`SECURE_CANARY_77A8B9C0`) into the system prompt context to detect downstream exfiltration.
-- **Backend Flexibility:** Supports local Ollama (`llama3`), OpenAI-compatible APIs, and an offline Mock LLM client for standalone, zero-dependency testing.
+- **Canary Token Injection:** Injects a per-deployment, environment-driven canary token loaded from `SYSTEM_CANARY_TOKEN` (auto-generated via `secrets.token_urlsafe(24)` if unset, rotated per deployment, and never committed or published) into the system prompt context to detect downstream exfiltration.
+- **Backend Flexibility:** Supports local Ollama (`llama3`), OpenAI-compatible APIs, Gemini, and an offline Mock LLM client for standalone, zero-dependency testing.
 
 ### 4. Layer 4: Output Verification & Privacy Filter
 - **Canary Leak Detection:** Intercepts completions containing the secret canary token and completely suppresses output.
@@ -120,6 +120,9 @@ SecureLLM/
 │   ├── security.py               # Input validation, PII redaction, canary check, audit logger
 │   ├── guardrail_service.py      # Security pipeline coordinator & NeMo Guardrails integration
 │   └── templates/index.html      # Minimal playground UI with Bearer token input
+│
+├── docs/
+│   └── internal_pattern_catalogue.md # Internal heuristic pattern reference (do not publish)
 │
 ├── guardrails/
 │   ├── config.yml                # NeMo Guardrails YAML configuration
@@ -163,14 +166,17 @@ SecureLLM/
 - Virtual environment (`venv`)
 
 ### 2. Installation
-```powershell
-# Clone or navigate to the repository
-cd "D:\Project\Guardrails and Safety Layers for LLM Applications"
+```bash
+# Clone and enter the repository
+git clone https://github.com/Fizzy444/Guardrails-and-Safety-Layers-for-LLM-Applications.git
+cd Guardrails-and-Safety-Layers-for-LLM-Applications
 
-# Activate the virtual environment
-.\.venv\Scripts\Activate.ps1
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS
+# .\.venv\Scripts\Activate.ps1   # Windows PowerShell
 
-# Install dependencies
+# Install pinned dependencies
 pip install -r requirements.txt
 ```
 
@@ -272,11 +278,12 @@ Under `FAIL_CLOSED=True` (default), errors in authentication, guardrails, or inf
 
 ---
 
-## 📊 Red-Team & Independent Holdout Evaluation
+## 📊 Same-Corpus Validation & Independent Holdout Evaluation
 
-1. **Red-Team Corpus (`tests/red_team_tests.py`, [red_team_report.md](file:///reports/red_team_report.md)):**
-   - **Adversarial (10 scenarios):** 10/10 blocked (**100.0% TPR**).
-   - **Benign Controls (10 prompts, incl. security/dev questions):** 0/10 blocked (**0.0% FPR**, target <= 5%).
+1. **Same-Corpus Validation (`tests/red_team_tests.py`, [red_team_report.md](file:///reports/red_team_report.md)):**
+   Validates that the detector catches its own target patterns and does not block benign security/dev queries from the same design set:
+   - **Adversarial (10 target scenarios):** 10/10 blocked (**100.0% same-corpus TPR**).
+   - **Benign Controls (10 prompts, incl. security/dev questions):** 0/10 blocked (**0.0% same-corpus FPR**, target <= 5%).
 2. **Independent Holdout vs. Same-Corpus Delta (`tests/holdout_evaluation.py`, [holdout_evaluation.md](file:///reports/holdout_evaluation.md)):**
    Evaluated on a separate, previously unseen corpus (10 novel semantic/obfuscated attacks + 10 novel benign prompts) **without** tuning rules to fit the holdout set:
 

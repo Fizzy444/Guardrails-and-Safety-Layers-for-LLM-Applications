@@ -90,3 +90,20 @@ async def test_fail_closed_when_ollama_unreachable(monkeypatch):
     unreachable_ollama = OllamaLLM(base_url="http://127.0.0.1:59999", model="llama3")
     with pytest.raises(LLMBackendError):
         await unreachable_ollama.generate("Hello")
+
+
+def test_canary_token_is_dynamic_and_env_driven(monkeypatch):
+    """SYSTEM_CANARY_TOKEN is dynamically generated per deployment and respects env overrides."""
+    from app.config import Settings
+
+    monkeypatch.delenv("SYSTEM_CANARY_TOKEN", raising=False)
+    s1 = Settings(_env_file=None)
+    s2 = Settings(_env_file=None)
+    assert s1.SYSTEM_CANARY_TOKEN.startswith("CANARY_")
+    assert len(s1.SYSTEM_CANARY_TOKEN) >= 32
+    assert s1.SYSTEM_CANARY_TOKEN != s2.SYSTEM_CANARY_TOKEN
+    assert "SECURE_CANARY_77A8B9C0" not in s1.SYSTEM_CANARY_TOKEN
+
+    monkeypatch.setenv("SYSTEM_CANARY_TOKEN", "ENV_ROTATED_CANARY_XYZ")
+    s3 = Settings(_env_file=None)
+    assert s3.SYSTEM_CANARY_TOKEN == "ENV_ROTATED_CANARY_XYZ"

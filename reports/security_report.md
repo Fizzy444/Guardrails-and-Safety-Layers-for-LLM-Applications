@@ -71,7 +71,7 @@ flowchart TD
         
         L2["Layer 2: NeMo Guardrails Engine (guardrails/)<br/>• Colang 1.0 intent mapping (rails.co)<br/>• Programmable dialog flows & refusals<br/>• Policy configuration (config.yml)"]
         
-        L3["Layer 3: Controlled LLM Execution (app/llm.py)<br/>• Immutable boundary wrapping<br/>• Canary token injection (SECURE_CANARY_77A8B9C0)<br/>• Gemini 2.5 / Ollama / OpenAI / Mock backend"]
+        L3["Layer 3: Controlled LLM Execution (app/llm.py)<br/>• Immutable boundary wrapping<br/>• Env-driven per-deployment canary token<br/>• Gemini 2.5 / Ollama / OpenAI / Mock backend"]
         
         L4["Layer 4: Output Safety & Privacy Filter (app/security.py)<br/>• Canary token leak interceptor<br/>• System prompt verbatim suppression<br/>• Harmful content / malware filter<br/>• Automated PII scrubber (Email, Phone, SSN, CC, Keys)"]
         
@@ -96,7 +96,9 @@ flowchart TD
 
 ## 4. Empirical Evaluation & Experimental Results
 
-### 4.1 Key Performance Metrics
+### 4.1 Same-Corpus Validation Metrics
+
+> **Scope Note:** The 100.0% ABR / 0.0% FPR figures below are **same-corpus validation** against the 15 adversarial and 15 benign prompts the detector was designed to catch. For generalization performance on unseen semantic/obfuscated attacks (**20.0% holdout TPR**), see [holdout_evaluation.md](file:///reports/holdout_evaluation.md).
 
 $$\text{Attack Blocking Rate (ABR)} = \frac{\text{Attacks Blocked}}{\text{Total Attacks Tested}} \times 100\% = \frac{15}{15} \times 100\% = \mathbf{100.0\%}$$
 
